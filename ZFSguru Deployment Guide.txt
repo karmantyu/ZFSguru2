@@ -1,0 +1,116 @@
+This deployment guide is for your own consideration. Use ZFSguru web system with caution, it is in development. Do not use it on live systems.
+
+Assuming You have installed FreeBSD 12.1 and it’s up and running and You are superuser.
+
+# Changing the default shell to bash
+pkg install bash
+
+# Now to make use of the new shell:
+rehash
+bash
+export EDITOR=ee
+vipw
+
+# Now you're inside the ee editor in the system password file. Here you can change the default shell for root, so it starts bash instead of the default csh shell. To do this, look for the line beginning with root and look at the end of this line for the text "/bin/csh". Replace it to say "/usr/local/bin/bash". Now press escape-enter-enter to exit and save.
+# Installing necessary applications and services
+pkg install lighttpd fcgi-devkit php74 php74-session sudo wget samba411
+
+# An important file is the /etc/rc.conf configuration file, which controls which programs and services are started at boot time and holds many important options, such as those related to network configuration. You can edit it: ee /etc/rc.conf
+# or simply copypaste the next lines and execute it
+sysrc zfs_enable="YES" sysrc hald_enable="YES" sysrc dbus_enable="YES" sysrc moused_enable="YES" sysrc samba_server_enable="YES" sysrc lighttpd_enable=”YES” sysrc sshd_enable=”YES” sysrc ntpdate_enable=”YES” sysrc ntpd_enable=”YES” sysrc powerd_enable=”YES”
+
+# Let’s edit FSTAB.
+ee /etc/fstab
+
+# Add line:
+proc /proc procfs rw 0 0
+
+# Let’s edit loader.conf to enable AHCI driver
+ee /boot/loader.conf
+
+# Add line:
+ahci_load="YES"
+
+# Create a user and group called 'zfsguru-web' with uid 888 and gid 888:
+pw groupadd zfsguru-web -g 888
+pw useradd zfsguru-web -u 888 -d /nonexistent -s /usr/sbin/nologin
+
+# Change /usr/local/etc/sudoers.d to allow zfsguru-web access instead of user 'www'.
+# First check sudoers sanity with visudo (if for some reason visudo is not working type ee /usr/local/etc/sudoers)
+# It should contain the line @includedir /usr/local/etc/sudoers.d
+
+# Create web user access in the include so zfsguru-web user root access can work without password prompt
+ee /usr/local/etc/sudoers.d/zfsguru-web
+
+# Insert line
+%zfsguru-web    ALL=(ALL) NOPASSWD: ALL
+
+# Create some directories with the necessary permissions
+touch /var/log/lighttpd.error.log
+mkdir /var/spool/lighttpd
+mkdir /var/run/lighttpd
+touch /var/run/lighttpd/sockets/php-fastcgi-1.socket-0
+chown 888:888 /var/log/lighttpd.error.log
+chown -R 888:888 /var/run/lighttpd
+
+# Let’s create working directory for the zfsguru web service
+mkdir /usr/local/www/zfsguru
+cd /usr/local/www/zfsguru
+
+# Download the files with #wget --no-check-certificate --content-disposition https://codeload.github.com/pehsa/ZFSguru2/legacy.tar.gz/master
+# or better with
+wget -cr –-no-check-certificate https://github.com/pehsa/ZFSguru2/archive/master.zip
+
+# uncompressing downloaded files and putting them to the right place
+unzip –o master.zip
+mv –f ZFSguru2-master/* /usr/local/www/zfsguru/
+
+# set permission for the files and directory
+chown -R 888:888 /usr/local/www/zfsguru
+
+# Now, let the webserver Lighttpd run with the new zfsguru-web user by modifying /usr/local/etc/lighttpd/lighttpd.conf, and replace the current 'www' user configuration with 'zfsguru-web' like this:
+ee /usr/local/etc/lighttpd/lighttpd.conf
+server.username = "zfsguru-web"
+server.groupname = "zfsguru-web"
+server.document-root = “/usr/local/www/zfsguru/”
+
+# Then You need to change permissions to zfsguru-web for some directories:
+chown -R 888:888 /var/spool/lighttpd
+chown -R 888:888 /var/log/lighttpd
+chown -R 888:888 /var/run/lighttpd
+
+# Then update lighttpd with the new lighttpd.conf:
+lighttpd -f /usr/local/etc/lighttpd/lighttpd.conf restart
+
+# Let's start the webinterface
+service lighttpd onestart
+
+# The ZFSguru administrative webpage should be up and running on the sever IP address port 80 so type in your browser the server IP. That should be it. Have fun.
+
+P.S.
+
+In some cases on the DISKS page the identifiers are messed up slightly. Then append the next lines to /boot/loader.conf
+# disable id labels
+kern.geom.label.disk_ident.enable="0"
+kern.geom.label.gpt.enable="1"
+kern.geom.label.gptid.enable="0"
+kern.geom.label.ufsid.enable="0"
+# disable legacy device mappings (ada->ad)
+kern.cam.ada.legacy_aliases="0"
+
+NFS Permissions
+The last issue we have to resolve is permissions. If you want both NFS and Samba/CIFS access to the same filesystem, you better let them use the same usernames. NFS user IDs are determined client side. Meaning if an Ubuntu client connects with NFS it will use its own username with uid 1000 to access and write files. So on the FreeBSD server you should create a new user with uid 1000 called "nfs" which is used for both NFS and Samba access.
+
+Go ahead and create the user:
+pw useradd nfs
+
+Now edit the group file and change the group id of the 'nfs' group to 1000:
+ee /etc/group
+Now reset all permissions:
+chown -R nfs:nfs /tank
+This should allow proper access without any 'access denied' errors on the client side.
+
+While Samba is running, add the new created user to Samba configuration, and give it a password:
+smbpasswd -a nfs
+
+Note that you can make more users this way; but aside from Samba permissions the user you use in smb.conf must also have permission to the actual files. Look at the logs contained in /var/log/samba4 if it's not working!
