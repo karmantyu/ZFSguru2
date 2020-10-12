@@ -4,6 +4,8 @@ Assuming You have installed FreeBSD 12.1 and it’s up and running and You are s
 
 # Changing the default shell to bash
 pkg install bash
+echo /usr/local/bin/bash >> /etc/shells
+chsh -s /usr/local/bin/bash
 
 # Now to make use of the new shell:
 rehash
