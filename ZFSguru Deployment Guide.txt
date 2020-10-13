@@ -19,7 +19,7 @@ pkg install lighttpd fcgi-devkit php74 php74-session sudo wget samba411
 
 # An important file is the /etc/rc.conf configuration file, which controls which programs and services are started at boot time and holds many important options, such as those related to network configuration. You can edit it: ee /etc/rc.conf
 # or simply copypaste the next lines and execute it
-sysrc zfs_enable="YES" sysrc hald_enable="YES" sysrc dbus_enable="YES" sysrc moused_enable="YES" sysrc samba_server_enable="YES" sysrc lighttpd_enable=”YES” sysrc sshd_enable=”YES” sysrc ntpdate_enable=”YES” sysrc ntpd_enable=”YES” sysrc powerd_enable=”YES”
+sysrc zfs_enable="YES" hald_enable="YES" dbus_enable="YES" moused_enable="YES" samba_server_enable="YES" lighttpd_enable=”YES” sshd_enable=”YES” ntpdate_enable=”YES” ntpd_enable=”YES” powerd_enable=”YES”
 
 # Let’s edit FSTAB.
 ee /etc/fstab
